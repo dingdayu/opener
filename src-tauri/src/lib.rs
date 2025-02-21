@@ -58,13 +58,30 @@ pub fn run() {
         }))
         .plugin(tauri_plugin_deep_link::init())
         .setup(|app| {
-            // 注册自定义协议
-            // #[cfg(any(target_os = "linux", target_os = "windows"))]
-            // app.deep_link().register_all()?;
+            // 设置托盘事件处理
+            tray::create_tray(app.handle())?;
 
+            // 设置窗口关闭事件处理
+            let window = app.get_webview_window("main").unwrap();
+            window.clone().on_window_event(move |event| {
+                if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                    api.prevent_close();
+                    window.hide().unwrap();
+                }
+            });
+            Ok(())
+        })
+        .setup(|app| {
             // 禁用右键菜单
             let window = app.get_webview_window("main").unwrap();
             window.eval("document.addEventListener('contextmenu', event => event.preventDefault());").unwrap();
+
+            Ok(())
+        })
+        .setup(|app| {
+            // 注册自定义协议
+            // #[cfg(any(target_os = "linux", target_os = "windows"))]
+            // app.deep_link().register_all()?;
 
             println!("Setting up URL handler...");
             let args = std::env::args().collect::<Vec<_>>();
@@ -95,17 +112,6 @@ pub fn run() {
                 }
             }
 
-            // 设置托盘事件处理
-            tray::create_tray(app.handle())?;
-
-            // 设置窗口关闭事件处理
-            let window = app.get_webview_window("main").unwrap();
-            window.clone().on_window_event(move |event| {
-                if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                    api.prevent_close();
-                    window.hide().unwrap();
-                }
-            });
 
             Ok(())
         })
