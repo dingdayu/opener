@@ -1,11 +1,9 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 mod tray;
-mod win;
 
 use tauri::{Emitter, Manager, Url};
 use tauri_plugin_log::{Target, TargetKind};
 use tauri_plugin_opener::OpenerExt; // 用于调用 app.emit
-use winapi::um::winuser::{FindWindowA, SetForegroundWindow};
 
 #[tauri::command]
 fn greet(name: &str) -> String {
