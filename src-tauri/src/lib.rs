@@ -39,7 +39,6 @@ pub fn run() {
                 match Url::parse(&args[1]) {
                     Ok(url) => {
                         if url.scheme() == "opener" {
-                            log::info!("Emitting opener event: {}", url.to_string());
                             app.emit("opener", url.to_string()).unwrap();
                             if let Some(query_pairs) =
                                 url.query_pairs().find(|(key, _)| key == "path")
@@ -71,15 +70,15 @@ pub fn run() {
 
             println!("Setting up URL handler...");
             let args = std::env::args().collect::<Vec<_>>();
+            // 如果 args[1] 以 opener 开头，则解析 url，获得域名和路径以及参数
             if args.len() > 1 && args[1].starts_with("opener://") {
+                // let url_str = args[1].replace("opener://", "");
+
                 // 使用 match 来处理错误，避免 unwrap() 导致 panic
                 match Url::parse(&args[1]) {
                     Ok(url) => {
                         if url.scheme() == "opener" {
-                            
                             app.emit("opener", url.to_string()).unwrap();
-                            // 获得 url 中 query 参数中的 path
-                            // 例如 opener://path/to/file?path=xxx
                             if let Some(query_pairs) =
                                 url.query_pairs().find(|(key, _)| key == "path")
                             {
@@ -87,14 +86,12 @@ pub fn run() {
                                 if let Err(e) = app.opener().open_path(&path, None::<&str>) {
                                     log::error!("Failed to open path: {}", e);
                                 } else {
-                                    // win::set_window_topmost(&path);
                                     log::info!("Opening path: {}", path);
                                 }
                             }
                         }
                     }
                     Err(e) => {
-                        // 弹出 alert 提示错误
                         log::error!("Failed to parse URL: {}", e);
                     }
                 }
