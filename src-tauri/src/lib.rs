@@ -15,6 +15,7 @@ fn greet(name: &str) -> String {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         // 日志插件应优先初始化
         .plugin(
@@ -25,11 +26,19 @@ pub fn run() {
                 .build(),
         )
         // 处理单例模式，防止多个实例运行
-        .plugin(tauri_plugin_single_instance::init(|_app, args, _cwd| {
+        .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
             log::info!("single instance triggered: {:?}", args);
             if let Some(url) = args.get(1) {
                 if url.starts_with("opener://") {
                     handle_opener_url(url);
+                }
+            } else {
+                log::info!("no args found, showing window");
+                // 如果没 args1 且 窗口处于隐藏状态，则显示窗口
+                if let Some(window) = app.get_webview_window("main") {
+                    if let Ok(false) = window.is_visible() {
+                        window.show().unwrap();
+                    }
                 }
             }
         }))

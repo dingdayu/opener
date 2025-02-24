@@ -5,11 +5,40 @@ import Switch from './components/Switch.vue';
 
 import { enable, isEnabled, disable } from '@tauri-apps/plugin-autostart';
 import { register, isRegistered, unregister } from '@tauri-apps/plugin-deep-link';
-import { getVersion } from "@tauri-apps/api/app";
+import { getVersion, getName } from "@tauri-apps/api/app";
 import { getCurrentWindow } from '@tauri-apps/api/window';
+
+import {
+  isPermissionGranted,
+  requestPermission,
+  sendNotification,
+} from '@tauri-apps/plugin-notification';
 
 const autoStartValue = ref(false);
 const customProtocolValue = ref(false);
+
+// 通知启动
+async function notificationStartd() {
+  // Do you have permission to send a notification?
+  let permissionGranted = await isPermissionGranted();
+
+  // If not we need to request it
+  if (!permissionGranted) {
+    const permission = await requestPermission();
+    permissionGranted = permission === 'granted';
+  }
+
+  // Once permission has been granted we can send the notification
+  if (permissionGranted) {
+    sendNotification({ title: 'Opener 已经启动', body: '启动后将自动进入后台运行' });
+  }
+}
+
+async function updateVerionToTitle() {
+  let cw = getCurrentWindow();
+  let v = await getVersion();
+  await cw.setTitle(await getName() + " for v" + v);
+}
 
 
 onMounted(async () => {
@@ -22,9 +51,10 @@ onMounted(async () => {
     console.error(e);
   }
 
-  let cw = getCurrentWindow()
-  await cw.setTitle(cw.title() + " for v" + getVersion());
-  
+
+  await notificationStartd()
+  await updateVerionToTitle()
+
   console.log(`registered for custom protocol? ${customProtocolValue.value}`);
 })
 
@@ -33,6 +63,7 @@ async function toggleAutoStart(checked: boolean) {
   if (checked) {
     console.log("enable autostart");
     await enable();
+    sendNotification({ title: '开机启动', body: '开机启动启用后，将加快打开速度', group: 'action' });
   } else {
     console.log("disable autostart");
     await disable();
@@ -47,6 +78,7 @@ async function toggleCustomProtocol(checked: boolean) {
   } else {
     console.log("unregister custom protocol");
     await unregister("opener");
+    sendNotification({ title: '移除协议注册', body: '移除协议注册后，将不能打开本地文件和路径', group: 'action' });
   }
 }
 </script>
