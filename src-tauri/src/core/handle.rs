@@ -2,8 +2,8 @@ use crate::log_err;
 use once_cell::sync::OnceCell;
 use parking_lot::RwLock;
 use std::sync::Arc;
-use tauri::{AppHandle, Manager, WebviewWindow};
 use tauri::Emitter;
+use tauri::{AppHandle, Manager, WebviewWindow};
 
 #[derive(Debug, Default, Clone)]
 pub struct Handle {

@@ -3,8 +3,8 @@ mod core;
 mod macros;
 
 use tauri::{Manager, Url};
-use tauri_plugin_opener::OpenerExt;
 use tauri_plugin_deep_link::DeepLinkExt;
+use tauri_plugin_opener::OpenerExt;
 use tokio::time::{sleep, Duration}; // ✅ 正确导入 sleep
 
 #[tauri::command]
@@ -15,6 +15,7 @@ fn greet(name: &str) -> String {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_updater::Builder::new().build())
         // 日志插件应优先初始化
         .plugin(
             tauri_plugin_log::Builder::new()
@@ -115,7 +116,7 @@ pub fn run() {
 }
 
 /// 处理 opener:// URL
-fn handle_opener_url( url: &str) {
+fn handle_opener_url(url: &str) {
     match Url::parse(url) {
         Ok(parsed_url) => {
             if parsed_url.scheme() == "opener" {
@@ -127,7 +128,6 @@ fn handle_opener_url( url: &str) {
                 // 解析 URL 参数 path
                 if let Some(query_pairs) = parsed_url.query_pairs().find(|(key, _)| key == "path") {
                     let path = query_pairs.1.to_string();
-                    
 
                     if !path.is_empty() && std::path::Path::new(&path).exists() {
                         log::info!("Open ready:  {}", path);

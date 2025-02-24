@@ -12,7 +12,11 @@ fn setup_panic_hook() {
             None => "Unknown panic error",
         };
 
-        let location = panic_info.location().map_or("unknown location".to_string(), |l| format!("{}:{}", l.file(), l.line()));
+        let location = panic_info
+            .location()
+            .map_or("unknown location".to_string(), |l| {
+                format!("{}:{}", l.file(), l.line())
+            });
 
         log::error!("⚠️ Panic occurred at {}: {}", location, err_message);
     }));
