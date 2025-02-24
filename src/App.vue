@@ -5,7 +5,8 @@ import Switch from './components/Switch.vue';
 
 import { enable, isEnabled, disable } from '@tauri-apps/plugin-autostart';
 import { register, isRegistered, unregister } from '@tauri-apps/plugin-deep-link';
-
+import { getVersion } from "@tauri-apps/api/app";
+import { getCurrentWindow } from '@tauri-apps/api/window';
 
 const autoStartValue = ref(false);
 const customProtocolValue = ref(false);
@@ -20,6 +21,9 @@ onMounted(async () => {
   } catch (e) {
     console.error(e);
   }
+
+  let cw = getCurrentWindow()
+  await cw.setTitle(cw.title() + " for v" + getVersion());
   
   console.log(`registered for custom protocol? ${customProtocolValue.value}`);
 })
