@@ -6,6 +6,7 @@ use tauri::{Manager, Url};
 use tauri_plugin_deep_link::DeepLinkExt;
 use tauri_plugin_opener::OpenerExt;
 use tokio::time::{sleep, Duration}; // ✅ 正确导入 sleep
+use reqwest;
 
 #[tauri::command]
 fn greet(name: &str) -> String {
@@ -99,7 +100,7 @@ pub fn run() {
 
                 // 🚀 **启动后 500ms 后隐藏窗口**
                 tauri::async_runtime::spawn(async move {
-                    sleep(Duration::from_millis(500)).await;
+                    sleep(Duration::from_millis(300)).await; // 减少延迟时间以提升用户体验
                     if let Err(e) = window.hide() {
                         log::error!("Failed to hide main window on startup: {}", e);
                     }
@@ -124,45 +125,96 @@ pub fn run() {
         .expect("error while running tauri application");
 }
 
+#[derive(Debug)]
+enum OpenerError {
+    InvalidUrl(url::ParseError),
+    InvalidScheme,
+    InvalidPath(String),
+    OpenError(String),
+    CallbackError(String),
+}
+
+/// 验证路径是否有效
+fn validate_path(path: &str) -> Result<(), OpenerError> {
+    if path.is_empty() {
+        return Err(OpenerError::InvalidPath("Path is empty".to_string()));
+    }
+    if !std::path::Path::new(path).exists() {
+        return Err(OpenerError::InvalidPath(format!("Path does not exist: {}", path)));
+    }
+    Ok(())
+}
+
+/// 发送回调请求
+async fn send_callback(callback_url: &str) -> Result<(), OpenerError> {
+    reqwest::get(callback_url)
+        .await
+        .map_err(|e| OpenerError::CallbackError(e.to_string()))?;
+    Ok(())
+}
+
 /// 处理 opener:// URL
 fn handle_opener_url(url: &str) {
-    match Url::parse(url) {
-        Ok(parsed_url) => {
-            if parsed_url.scheme() == "opener" {
-                log::info!("Processing deep link: {}", parsed_url);
-
-                let app_handle = core::handle::Handle::global().app_handle().unwrap();
-                // app_handle.emit("opener", parsed_url.to_string()).unwrap();
-
-                // 解析 URL 参数 path
-                if let Some(query_pairs) = parsed_url.query_pairs().find(|(key, _)| key == "path") {
-                    let path = query_pairs.1.to_string();
-
-                    if !path.is_empty() && std::path::Path::new(&path).exists() {
-                        log::info!("Open ready:  {}", path);
-                        if let Err(e) = app_handle.opener().open_path(&path, None::<&str>) {
-                            log::error!("Failed to open path: {}", e);
-                        } else {
-                            log::info!("Opening path: {}", path);
-                        }
-                    } else {
-                        log::error!("Invalid path: {}", path);
-                    }
-                }
-
-                // // 🚀 **Deep Link 触发时显示窗口**
-                // if let Some(window) = app_handle.get_webview_window("main") {
-                //     if let Err(e) = window.show() {
-                //         log::error!("Failed to show main window: {}", e);
-                //     }
-                //     if let Err(e) = window.set_focus() {
-                //         log::error!("Failed to focus main window: {}", e);
-                //     }
-                // }
-            }
+    let result = (|| -> Result<(), OpenerError> {
+        let parsed_url = Url::parse(url).map_err(|e| {
+            log::error!("URL parse error: {}", e);
+            OpenerError::InvalidUrl(e)
+        })?;
+        
+        if parsed_url.scheme() != "opener" {
+            return Err(OpenerError::InvalidScheme);
         }
-        Err(e) => {
-            log::error!("Failed to parse URL: {}", e);
+        
+        log::info!("Processing deep link: {}", parsed_url);
+        let app_handle = core::handle::Handle::global().app_handle().unwrap();
+
+        // 获取回调 URL（支持多个参数名）
+        let callback_url = parsed_url.query_pairs()
+            .find(|(key, _)| key == "callback" || key == "after" || key == "do")
+            .map(|(_, value)| value.to_string());
+
+        if let Some(query_pairs) = parsed_url.query_pairs().find(|(key, _)| key == "path") {
+            let path = query_pairs.1.to_string();
+            validate_path(&path)?;
+            
+            log::info!("Open ready: {}", path);
+            app_handle.opener().open_path(&path, None::<&str>)
+                .map_err(|e| {
+                    let err_msg = e.to_string();
+                    log::error!("Failed to open path: {}", err_msg);
+                    OpenerError::OpenError(err_msg)
+                })?;
+            
+            log::info!("Opening path: {}", path);
+
+            // 如果存在回调 URL，发送回调请求
+            if let Some(callback) = callback_url {
+                log::info!("Sending callback to: {}", callback);
+                tauri::async_runtime::spawn(async move {
+                    if let Err(e) = send_callback(&callback).await {
+                        match &e {
+                            OpenerError::CallbackError(err_msg) => {
+                                log::error!("Failed to send callback: {:?}, {}", callback, err_msg);
+                            },
+                            _ => log::error!("Unexpected error in callback: {:?}", e),
+                        }
+                    }
+                });
+            }
+
+            Ok(())
+        } else {
+            Err(OpenerError::InvalidPath("No path parameter found".to_string()))
+        }
+    })();
+
+    if let Err(e) = result {
+        match &e {
+            OpenerError::InvalidUrl(err) => log::error!("Failed to handle opener URL - Invalid URL: {}", err),
+            OpenerError::InvalidScheme => log::error!("Failed to handle opener URL: Invalid scheme"),
+            OpenerError::InvalidPath(path_err) => log::error!("Failed to handle opener URL - Path error: {}", path_err),
+            OpenerError::OpenError(open_err) => log::error!("Failed to handle opener URL - Open error: {}", open_err),
+            OpenerError::CallbackError(cb_err) => log::error!("Failed to handle opener URL - Callback error: {}", cb_err),
         }
     }
 }
